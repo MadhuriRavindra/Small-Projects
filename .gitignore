@@ -1,0 +1,6 @@
+.env
+.streamlit/secrets.toml
+data/pdfs/
+data/web/
+qdrant_local/
+__pycache__/

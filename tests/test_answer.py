@@ -1,0 +1,48 @@
+"""Offline test of the whole cycle with a FAKE LLM (no Groq call). Run: python -m tests.test_answer"""
+import os, shutil, json
+from types import SimpleNamespace
+os.environ["EMBEDDER"] = "fake"; os.environ["QDRANT_URL"] = ""
+from core import config
+shutil.rmtree(config.QDRANT_LOCAL_PATH, ignore_errors=True)
+from ingest.csv_loader import load_laptops_csv
+from ingest.index import index_documents
+from core import answer
+
+qc = index_documents(load_laptops_csv(config.CSV_PATH), recreate=True)
+
+class FakeLLM:
+    def __init__(self): self.calls = []
+    def _create(self, **kw):
+        self.calls.append(kw)
+        sysmsg = kw["messages"][0]["content"]
+        if "JSON filters" in sysmsg:
+            out = json.dumps({"query": "coding, lightweight", "budget_max": "70000", "min_ram_gb": 16,
+                              "needs_dedicated_gpu": False, "categories": ["Student", "toaster"], "brands": None})
+        else:
+            out = "FAKE ANSWER based on:\n" + kw["messages"][1]["content"][:200]
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=out))])
+    @property
+    def chat(self): return SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+llm = FakeLLM()
+ans, hits, req, note = answer.recommend("laptop for coding under 70k, light", qdrant_client=qc, llm_client=llm)
+assert req.budget_max == 70000.0 and req.min_ram_gb == 16 and req.categories == ["student"], req
+assert req.needs_dedicated_gpu is None
+assert hits and all(h["price_inr"] <= 70000 and h["ram_gb"] >= 16 and h["category"] == "student" for h in hits)
+assert "FAKE ANSWER" in ans and len(llm.calls) == 2
+# static system prompt first -> cache friendly
+assert llm.calls[1]["messages"][0]["content"] == answer.ANSWER_SYSTEM
+
+# relaxing: impossible combo (Apple + 20k budget) must still degrade gracefully
+req2 = answer.Requirements(query="laptop", budget_max=20000, brands=["Apple"])
+h2, used, note2 = answer.retrieve_with_fallback(req2, 3, client=qc)
+assert h2 == [] and note2 and "Nothing" in note2
+req3 = answer.Requirements(query="laptop", budget_max=60000, brands=["Apple"])
+h3, used3, note3 = answer.retrieve_with_fallback(req3, 3, client=qc)
+assert h3 and note3 and all(h["price_inr"] <= 60000 for h in h3), (h3, note3)
+
+# broken LLM output must not crash parsing
+bad = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kw: (_ for _ in ()).throw(RuntimeError("rate limit")))))
+r = answer.parse_requirements("cheap laptop", client=bad)
+assert r.query == "cheap laptop"
+print("ALL CHECKS PASSED")

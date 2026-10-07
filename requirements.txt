@@ -1,0 +1,6 @@
+pandas>=2.0
+qdrant-client>=1.9
+fastembed>=0.3
+python-dotenv>=1.0
+streamlit>=1.35
+groq>=0.9
