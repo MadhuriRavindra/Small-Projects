@@ -1,7 +1,7 @@
 """Run on YOUR machine (not in the deployed app).
 
   python -m ingest.index --recreate                       # rebuild from the CSV only
-  python -m ingest.index --sources csv pdf web reddit     # add more inputs (additive upsert)
+  python -m ingest.index --sources csv pdf web reddit guide   # add more inputs (additive upsert)
   python -m ingest.index --sources pdf                    # re-index just the PDFs
 
 --recreate DROPS the whole collection, so combine it with every source you want to keep.
@@ -43,6 +43,9 @@ def load_sources(sources):
         elif s == "web":
             from ingest.web_loader import load_web_documents
             docs += load_web_documents()
+        elif s == "guide":
+            from ingest.guide_loader import load_guide_documents
+            docs += load_guide_documents()
         elif s == "reddit":
             from ingest.reddit_loader import load_reddit_documents
             docs += load_reddit_documents()
@@ -52,7 +55,7 @@ def load_sources(sources):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--recreate", action="store_true", help="drop and rebuild the collection")
-    ap.add_argument("--sources", nargs="+", default=["csv"], choices=["csv", "pdf", "web", "reddit"])
+    ap.add_argument("--sources", nargs="+", default=["csv"], choices=["csv", "pdf", "web", "reddit", "guide"])
     args = ap.parse_args()
     docs = load_sources(args.sources)
     print(f"loaded {len(docs)} documents from: {', '.join(args.sources)}")

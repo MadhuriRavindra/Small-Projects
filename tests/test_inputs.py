@@ -15,8 +15,9 @@ from ingest.csv_loader import load_laptops_csv
 from ingest.index import index_documents
 from ingest.pdf_loader import load_pdf_documents
 from ingest.web_loader import load_web_documents
+from ingest.guide_loader import load_guide_documents
 from ingest import reddit_loader
-from core.retriever import search_evidence
+from core.retriever import search_evidence, search_guides
 from core import answer
 
 catalog = load_catalog(); idx = build_alias_index(catalog)
@@ -91,11 +92,16 @@ rdocs = reddit_loader.load_reddit_documents(cache)
 assert rdocs and all(d.source_type == "reddit" and d.meta["subreddit"] == "LaptopsIndia" for d in rdocs)
 
 # ---- index everything together, then retrieve evidence ----
-client = index_documents(load_laptops_csv(config.CSV_PATH) + docs2 + wdocs + rdocs, recreate=True)
+gdocs = load_guide_documents()
+assert len(gdocs) >= 4 and all(d.source_type == "guide" and d.product_id is None for d in gdocs)
+client = index_documents(load_laptops_csv(config.CSV_PATH) + docs2 + wdocs + rdocs + gdocs, recreate=True)
+g = search_guides("how much RAM do I need for programming", top_k=2, client=client)
+assert len(g) == 2 and all(x["source_type"] == "guide" for x in g)
+assert any("RAM" in x["text"] for x in g), [x["text"][:60] for x in g]
 ev = search_evidence("gaming battery and cooling", [LEGION, PRO_M3PRO], per_product=3, client=client)
 types_legion = {e["source_type"] for e in ev if e["product_id"] == LEGION}
 assert types_legion == {"pdf", "web", "reddit"}, types_legion       # one of each source type surfaces
-assert all(e["source_type"] != "csv" for e in ev)
+assert all(e["source_type"] not in ("csv", "guide") for e in ev)   # guides are fetched separately
 assert any(e["source_type"] == "reddit" and e["score"] >= 2 for e in ev)   # upvotes preserved, not overwritten
 assert search_evidence("x", [], client=client) == []
 
@@ -121,6 +127,6 @@ llm = LLM()
 a, hits, req, note, evidence = answer.recommend("gaming laptop with good cooling and battery, Lenovo", top_k=5, qdrant_client=client, llm_client=llm)
 prompt = llm.calls[-1]["messages"][1]["content"]
 assert "Evidence snippets" in prompt and "PDF spec sheet" in prompt and "Reddit" in prompt, prompt[-1500:]
-assert "upvotes" in prompt
+assert "upvotes" in prompt and "Buying guide" in prompt and "[general]" in prompt
 assert evidence and any(e["product_id"] == LEGION for e in evidence)
 print("ALL CHECKS PASSED")

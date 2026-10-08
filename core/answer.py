@@ -8,7 +8,7 @@ import re
 from dataclasses import replace
 
 from core import config
-from core.retriever import Requirements, search, search_evidence
+from core.retriever import Requirements, search, search_evidence, search_guides
 
 CATEGORIES = ["budget", "student", "ultraportable", "business", "gaming", "creator"]
 BRANDS = ["Lenovo", "HP", "Dell", "ASUS", "Acer", "Apple", "Samsung", "MSI", "Honor", "Infinix"]
@@ -79,8 +79,9 @@ Rules:
 4. Mention real trade-offs (weight, battery, noise, build) using the pros and cons provided.
 5. If no laptop fits perfectly, say so plainly and explain which requirement was relaxed.
 6. Evidence snippets may come from different sources: PDF = manufacturer spec sheets (facts), Reddit and web = opinions and reviews. When you use a snippet, say where it comes from in plain words (for example "a Reddit owner reports..." or "the spec sheet lists..."). Treat opinions as opinions: one comment is not a consensus, so say "some owners" unless several snippets agree. If a snippet conflicts with the database, point out the difference. Do not quote snippets at length.
-7. Prices and specs in this database are approximate sample data. Remind the shopper in one short line to verify the current price and configuration on the seller's site before buying.
-8. Keep the answer under 300 words. Use short paragraphs or a compact list. Plain language, no hype."""
+7. Snippets labelled "Buying guide" are general advice, not facts about one laptop. Use them only to explain why a spec matters (for example why RAM or GPU matters for the shopper's use), and only if relevant.
+8. Prices and specs in this database are approximate sample data. Remind the shopper in one short line to verify the current price and configuration on the seller's site before buying.
+9. Keep the answer under 300 words. Use short paragraphs or a compact list. Plain language, no hype."""
 
 
 # ---------- helpers ----------
@@ -206,12 +207,12 @@ def _fmt_hit(h: dict) -> str:
 
 
 def _fmt_evidence(e: dict) -> str:
-    kind = {"pdf": "PDF spec sheet", "reddit": "Reddit", "web": "Web review"}.get(e["source_type"], e["source_type"])
+    kind = {"pdf": "PDF spec sheet", "reddit": "Reddit", "web": "Web review", "guide": "Buying guide"}.get(e["source_type"], e["source_type"])
     where = e.get("file") or e.get("subreddit") or e.get("url") or e.get("source_name", "")
     extra = f", p.{e['page']}" if e.get("page") else (f", {e['score']} upvotes" if e["source_type"] == "reddit" and e.get("score") else "")
     body = " ".join(str(e["text"]).split())
     body = body.split(" - ", 1)[1] if " - " in body[:80] else body   # drop the "Brand Model - " prefix
-    return f"[{e['product_id']}] {kind} ({where}{extra}): {body[:400]}"
+    return f"[{e.get('product_id') or 'general'}] {kind} ({where}{extra}): {body[:400]}"
 
 
 def generate_answer(user_text: str, req: Requirements, hits: list[dict], note: str | None = None,
@@ -247,5 +248,9 @@ def recommend(user_text: str, history: list[str] | None = None, top_k: int = 5, 
         evidence = search_evidence(user_text, [h["product_id"] for h in hits[:4]], per_product=3, client=qdrant_client)
     except Exception:
         pass  # evidence is a bonus: never fail the answer because of it
+    try:
+        evidence = evidence + search_guides(user_text, top_k=2, client=qdrant_client)
+    except Exception:
+        pass
     answer = generate_answer(user_text, used_req, hits, note, client=llm_client, evidence=evidence)
     return answer, hits, used_req, note, evidence

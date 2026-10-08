@@ -26,14 +26,14 @@ def _llm():
     return get_llm_client()
 
 
-ICONS = {"pdf": "📄 Spec sheet", "reddit": "💬 Reddit", "web": "🌐 Web review"}
+ICONS = {"pdf": "📄 Spec sheet", "reddit": "💬 Reddit", "web": "🌐 Web review", "guide": "📘 Buying guide"}
 
 
 def _render_sources(evidence):
     with st.expander(f"Sources used ({len(evidence)})"):
         for e in evidence:
             label = ICONS.get(e["source_type"], e["source_type"])
-            name = f"{e.get('brand', '')} {e.get('model', '')}".strip()
+            name = f"{e.get('brand', '')} {e.get('model', '')}".strip() or e.get("title", "General advice")
             where = e.get("file") or (f"r/{e['subreddit']}" if e.get("subreddit") else e.get("source_name", ""))
             page = f" p.{e['page']}" if e.get("page") else ""
             link = e.get("url") if str(e.get("url", "")).startswith("http") else None

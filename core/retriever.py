@@ -92,3 +92,15 @@ def search_evidence(query: str, product_ids: list[str], per_product: int = 2, cl
     order = {pid: i for i, pid in enumerate(product_ids)}
     taken.sort(key=lambda p: (order.get(p.payload["product_id"], 99), -p.score))
     return [{**p.payload, "similarity": round(p.score, 4)} for p in taken]
+
+
+def search_guides(query: str, top_k: int = 2, client=None) -> list[dict]:
+    """General buying-guide chunks (not tied to one laptop) that best match the question."""
+    client = client or get_client()
+    flt = Filter(must=[FieldCondition(key="source_type", match=MatchValue(value="guide"))])
+    res = client.query_points(
+        collection_name=config.COLLECTION,
+        query=embed_query(query.strip() or "how to choose a laptop"),
+        query_filter=flt, limit=top_k, with_payload=True,
+    )
+    return [{**p.payload, "similarity": round(p.score, 4)} for p in res.points]

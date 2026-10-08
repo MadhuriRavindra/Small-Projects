@@ -4,4 +4,6 @@ pypdf>=4.0
 trafilatura>=1.8
 requests>=2.31
 praw>=7.7
-reportlab
+
+# only for tests/test_inputs.py
+reportlab>=4.0
