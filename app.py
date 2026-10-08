@@ -18,14 +18,30 @@ st.set_page_config(page_title="Laptop Advisor India", page_icon="💻", layout="
 
 @st.cache_resource
 def _qdrant():
-    from core.embeddings import embed_query
-    embed_query("warm up")   # loads the embedding model once
     return get_client()
 
 
 @st.cache_resource
 def _llm():
     return get_llm_client()
+
+
+ICONS = {"pdf": "📄 Spec sheet", "reddit": "💬 Reddit", "web": "🌐 Web review"}
+
+
+def _render_sources(evidence):
+    with st.expander(f"Sources used ({len(evidence)})"):
+        for e in evidence:
+            label = ICONS.get(e["source_type"], e["source_type"])
+            name = f"{e.get('brand', '')} {e.get('model', '')}".strip()
+            where = e.get("file") or (f"r/{e['subreddit']}" if e.get("subreddit") else e.get("source_name", ""))
+            page = f" p.{e['page']}" if e.get("page") else ""
+            link = e.get("url") if str(e.get("url", "")).startswith("http") else None
+            head = f"**{label}** - {name} - {where}{page}"
+            st.markdown(f"{head}  [open]({link})" if link else head)
+            body = " ".join(str(e["text"]).split())
+            body = body.split(" - ", 1)[1] if " - " in body[:80] else body
+            st.caption(body[:350] + ("..." if len(body) > 350 else ""))
 
 
 st.title("💻 Laptop Advisor (India)")
@@ -50,6 +66,8 @@ for m in st.session_state.messages:
         st.markdown(m["content"])
         if m.get("table") is not None:
             st.dataframe(m["table"], use_container_width=True, hide_index=True)
+        if m.get("sources"):
+            _render_sources(m["sources"])
 
 user_text = st.chat_input("e.g. Laptop for coding and travel under 80k")
 if user_text:
@@ -61,7 +79,7 @@ if user_text:
     with st.chat_message("assistant"):
         try:
             with st.spinner("Searching and comparing..."):
-                answer, hits, req, note = recommend(user_text, history, top_k=top_k,
+                answer, hits, req, note, evidence = recommend(user_text, history, top_k=top_k,
                                                     qdrant_client=_qdrant(), llm_client=_llm())
         except Exception as e:  # keep the app alive on rate limits / network errors
             st.error(f"Something went wrong: {e}")
@@ -77,9 +95,11 @@ if user_text:
                 "Weight (kg)": h["weight_kg"], "Battery (Wh)": h["battery_wh"], "Rating": h["rating"],
             } for h in hits])
             st.dataframe(table, use_container_width=True, hide_index=True)
+        if evidence:
+            _render_sources(evidence)
         if show_debug:
             with st.expander("How I understood your request"):
-                st.json({k: v for k, v in req.__dict__.items() if v not in (None, "", [])})
+                st.json({k: v for k, v in req.__dict__.items() if v not in (None, "", [])})  # includes intent
                 if note:
                     st.info(note)
-    st.session_state.messages.append({"role": "assistant", "content": answer, "table": table})
+    st.session_state.messages.append({"role": "assistant", "content": answer, "table": table, "sources": evidence})

@@ -1,0 +1,7 @@
+# Only needed on YOUR machine for ingestion (not for the deployed app)
+-r requirements.txt
+pypdf>=4.0
+trafilatura>=1.8
+requests>=2.31
+praw>=7.7
+reportlab

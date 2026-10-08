@@ -4,3 +4,4 @@ data/pdfs/
 data/web/
 qdrant_local/
 __pycache__/
+data/web/reddit_cache.jsonl

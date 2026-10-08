@@ -21,5 +21,5 @@ EMBED_DIM = 384
 EMBEDDER = os.getenv("EMBEDDER", "fastembed")
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")          # writes the final answer
-GROQ_PARSE_MODEL = os.getenv("GROQ_PARSE_MODEL", "llama-3.1-8b-instant")  # cheap/fast: extracts filters
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")          # writes the final answer
+GROQ_PARSE_MODEL = os.getenv("GROQ_PARSE_MODEL", "openai/gpt-oss-20b")  # cheap/fast: extracts filters
