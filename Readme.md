@@ -1,120 +1,132 @@
-# Laptop Advisor
+# 💻 Laptop Advisor
 
-An AI-powered laptop recommendation app for the **Indian market**. Tell it what you need ("a laptop under ₹70,000 for coding and light video editing") and it compares options from its knowledge base and recommends laptops that fit your requirements, with reasons.
+A RAG-based assistant that recommends laptops for the Indian market. Describe your budget and needs in plain language, and it retrieves matching laptops from a vector database and explains its recommendations with an LLM.
 
-Built with Retrieval-Augmented Generation (RAG): the answer is grounded in real data instead of the model's memory.
+**Live demo:** [YOUR_CLOUD_RUN_URL](YOUR_CLOUD_RUN_URL)
+*(Hosted on Google Cloud Run. The first load after idle can take 10-30 seconds because of cold starts.)*
 
-## Features
+![Screenshot](docs/screenshot.png)
 
-**Available now**
-- Natural-language laptop questions, answered from structured laptop data (India market)
-- Vector search over laptop specs and prices stored in Qdrant Cloud
-- Fast LLM responses via Groq
-- Simple Streamlit web UI, deployed online
-
-**Planned**
-- More input types in one RAG ("multi-input RAG"): large PDF files (spec sheets, reviews), web pages and APIs
-- Real-user opinions from Reddit and similar communities
-- Prompt caching to cut cost and latency
-- Side-by-side comparison across sources
-- Evaluation of answer quality and hallucination
+---
 
 ## How it works
 
-```mermaid
-flowchart LR
-    A[Data sources<br/>CSV · PDFs · Web · Reddit] --> B[Ingestion<br/>clean + chunk]
-    B --> C[Embeddings]
-    C --> D[(Qdrant Cloud<br/>Laptop_Advisor)]
-    E[User question] --> F[Retrieve top matches]
-    D --> F
-    F --> G[Groq LLM<br/>grounded answer]
-    G --> H[Streamlit UI]
+```
+User question
+     │
+     ▼
+Streamlit UI ──► Embed query (fastembed)
+                      │
+                      ▼
+              Qdrant vector search ──► top matching laptops
+                      │
+                      ▼
+          Groq LLM (answers only from retrieved context)
+                      │
+                      ▼
+              Recommendation + reasoning
 ```
 
-1. Laptop data is cleaned, embedded and stored in a Qdrant collection.
-2. A user question is embedded and the most relevant laptops or passages are retrieved.
-3. The retrieved context and the question go to the LLM, which recommends laptops based only on that context.
+1. **Ingest:** laptop data from a CSV is cleaned, embedded, and stored in Qdrant.
+2. **Retrieve:** the user's query is embedded and matched against the stored laptops.
+3. **Generate:** the LLM answers using only the retrieved laptops, and says so when the data doesn't cover the question.
 
 ## Tech stack
 
-| Part | Tool |
+| Layer | Tool |
 |---|---|
 | UI | Streamlit |
+| Vector database | Qdrant Cloud |
+| Embeddings | fastembed |
 | LLM | Groq |
-| Vector database | Qdrant Cloud (free tier) |
-| Data | CSV today; PDFs, web pages, Reddit planned |
-| Language | Python |
+| Packaging | Docker |
+| Hosting | Google Cloud Run |
 
 ## Project structure
 
 ```
-laptop-advisor/
-├── data/
-│   ├── structured/     # laptops_india.csv and other tabular data
-│   ├── pdfs/           # PDF documents (planned)
-│   └── web/            # scraped web pages (planned)
-├── app.py              # Streamlit app
-├── requirements.txt
-├── .env                # your keys (never commit this)
-└── README.md
+.
+├── app.py            # Streamlit app
+├── core/             # Retrieval and generation logic
+├── ingest/           # Data loading and embedding scripts
+├── data/             # Laptop dataset
+├── tests/
+├── Dockerfile
+└── requirements.txt
 ```
 
-> Adjust file names above to match your repository.
+## Run locally
 
-## Getting started
-
-### 1. Clone and install
-
+**1. Clone and install**
 ```bash
-git clone <your-repo-url>
-cd laptop-advisor
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+git clone https://github.com/YOUR_USERNAME/Laptop-Advisor.git
+cd Laptop-Advisor
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Configure environment variables
+**2. Configure environment variables**
 
-Create a `.env` file in the project root:
-
-```env
-GROQ_API_KEY=your_groq_key
-QDRANT_URL=https://your-cluster-url
-QDRANT_API_KEY=your_qdrant_key
+Create a `.env` file (never commit it):
+```
+QDRANT_URL=https://your-cluster-url:6333
+QDRANT_API_KEY=your-qdrant-key
+GROQ_API_KEY=your-groq-key
 ```
 
-### 3. Load the data
+**3. Load the data into Qdrant** (run the script in `ingest/`)
 
-Put `laptops_india.csv` in `data/structured/`, then run your ingestion script to embed it and upload it to the `Laptop_Advisor` collection in Qdrant.
-
-### 4. Run the app
-
+**4. Start the app**
 ```bash
 streamlit run app.py
 ```
+Open http://localhost:8501.
 
-## Example questions
+## Run with Docker
 
-- "Best laptop under ₹60,000 for programming?"
-- "Compare lightweight laptops with good battery life for travel."
-- "I need a laptop for video editing with a dedicated GPU, budget ₹90,000."
+```bash
+docker build -t laptop-advisor .
+docker run -p 8080:8080 \
+  -e QDRANT_URL="https://your-cluster-url:6333" \
+  -e QDRANT_API_KEY="your-qdrant-key" \
+  -e GROQ_API_KEY="your-groq-key" \
+  laptop-advisor
+```
+Open http://localhost:8080.
 
-## Roadmap
+## Deploy to Google Cloud Run
 
-- [x] CSV data + Qdrant Cloud + Groq + Streamlit, deployed
-- [ ] Add PDF ingestion (including large PDFs)
-- [ ] Add web page ingestion
-- [ ] Add Reddit reviews (Reddit API access requested)
-- [ ] Prompt caching
-- [ ] Evaluation and hallucination checks
+```bash
+gcloud run deploy laptop-advisor \
+  --source . \
+  --region asia-south1 \
+  --allow-unauthenticated \
+  --memory 2Gi \
+  --env-vars-file env.yaml
+```
+
+`env.yaml` holds the same three variables as above in YAML form. It is listed in `.gitignore` and `.dockerignore`, so keys never end up in the image or the repository.
+
+## What I learned
+
+- Packaging a Python app with Docker, including matching the Python version and keeping the build context small with `.dockerignore`
+- Deploying to Cloud Run and fixing IAM permission errors for source deploys
+- Keeping API keys out of images and Git
 
 ## Limitations
 
-- Prices and availability change often; the data reflects when it was collected.
-- Recommendations are only as good as the data in the knowledge base.
-- Always verify the final price and specs on the seller's website before buying.
+- The dataset is a static snapshot, so prices and availability may be out of date.
+- Recommendations are limited to the laptops in the dataset.
+
+## Roadmap (v2)
+
+- [ ] LangGraph agent with query understanding, validation, and fallbacks
+- [ ] Redis caching to cut latency and LLM calls
+- [ ] Scheduled pipeline to refresh the RAG data
+- [ ] Live price and stock data through a source-adapter layer
+- [ ] Evaluation set to measure retrieval and answer quality
 
 ## License
 
-Add your license here (for example MIT).
+Add a license of your choice (for example MIT).
