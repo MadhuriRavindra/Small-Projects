@@ -7,3 +7,11 @@ __pycache__/
 data/web/reddit_cache.jsonl
 .venv/
 *.pyc
+env.yaml
+.venv
+.env
+env.yaml
+__pycache__/
+*.pyc
+qdrant_local/
+y/
